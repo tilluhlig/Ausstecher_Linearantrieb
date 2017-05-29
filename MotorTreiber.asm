@@ -49,18 +49,21 @@ rjmp loop
     pop r16
 .endm
 
+// fährt den Motor hoch
 .macro motor_hoch ; 3 Takte
     cbi PORTD, 6
     sbi PORTD, 7
     sbi PORTD, 5
 .endm
 
+// fährt den Motor runter
 .macro motor_runter ; 3 Takte
     sbi PORTD, 6
     cbi PORTD, 7
     sbi PORTD, 5
 .endm
 
+// stoppt 
 .macro motor_stop ; 3 Takte
     sbi PORTD, 6
     sbi PORTD, 7
@@ -180,6 +183,7 @@ CSE MotorRichtung, 1, A, B
 A:
 motor_sleep 600
 SSN MotorRichtung, 1
+motor_stop
 rjmp ende
 
 B:
@@ -189,6 +193,7 @@ rjmp ende
 
 motor_ist_oben:
 // der Motor ist bereits oben
+sts MotorRichtung, ALL
 motor_stop
 rjmp ende
 
@@ -201,6 +206,7 @@ CSN MotorRichtung, 1, A2, B2
 A2:
 motor_sleep 600
 SSE MotorRichtung, 1
+motor_stop
 rjmp ende
 
 B2:
@@ -209,6 +215,7 @@ motor_runter
 rjmp ende
 
 motor_ist_unten:
+sts MotorRichtung, ALL
 motor_stop
 rjmp ende
 
