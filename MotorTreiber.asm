@@ -70,6 +70,14 @@ rjmp loop
     cbi PORTD, 5
 .endm
 
+.macro ausstecher_stop ; 1 Takt
+    sbi PORTC, 3
+.endm
+
+.macro ausstecher_start ; 1 Takt
+    cbi PORTC, 3
+.endm
+
 reset:
 						
 ; NULL				
@@ -111,14 +119,16 @@ reset:
     sbi PORTC, 1
     cbi DDRC, 2
     sbi PORTC, 2
-    cbi DDRC, 3
-    sbi PORTC, 3
     cbi DDRC, 4
     sbi PORTC, 4
     cbi DDRC, 5
     sbi PORTC, 5
     SSN MotorSleep, 2
     SSN MotorRichtung, 1
+
+    ;Ausgänge
+    sbi DDRC, 3
+    sbi PORTC, 3
 
     sbi DDRD, 6
     sbi PORTD, 6
@@ -183,17 +193,20 @@ CSE MotorRichtung, 1, A, B
 A:
 motor_sleep 600
 SSN MotorRichtung, 1
+ausstecher_stop
 motor_stop
 rjmp ende
 
 B:
 SSN MotorRichtung, 1
+ausstecher_stop
 motor_hoch
 rjmp ende
 
 motor_ist_oben:
 // der Motor ist bereits oben
 sts MotorRichtung, ALL
+ausstecher_stop
 motor_stop
 rjmp ende
 
@@ -207,16 +220,19 @@ A2:
 motor_sleep 600
 SSE MotorRichtung, 1
 motor_stop
+ausstecher_stop
 rjmp ende
 
 B2:
 SSE MotorRichtung, 1
 motor_runter
+ausstecher_stop
 rjmp ende
 
 motor_ist_unten:
 sts MotorRichtung, ALL
 motor_stop
+ausstecher_start
 rjmp ende
 
 ende:
