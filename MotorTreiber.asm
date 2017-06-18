@@ -71,11 +71,32 @@ rjmp loop
 .endm
 
 .macro ausstecher_stop ; 1 Takt
+    SSN MotorDrehzeit_current, 2
     sbi PORTC, 3
 .endm
 
 .macro ausstecher_start ; 1 Takt
     cbi PORTC, 3
+.endm
+
+.macro setze_drehzeit ; Takte
+// setzte Drehzeit neu
+push r16
+
+lds r16, MotorDrehzeit_current
+cpi r16, 0
+brne keineNeueDrehzeit
+lds r16, MotorDrehzeit_current+1
+cpi r16, 0
+brne keineNeueDrehzeit
+lds r16, MotorModus
+cpi r16, 0
+brne keineNeueDrehzeit
+MSS MotorDrehzeit_current, 2, MotorDrehzeit
+STS MotorModus, EINS
+keineNeueDrehzeit:
+
+pop r16
 .endm
 
 reset:
@@ -114,17 +135,31 @@ reset:
     ldi      temp, LOW(RAMEND)
     out      SPL, temp
 
+    ; ADC initialisieren: ADC4, Vcc als Referenz, Single Conversion, Vorteiler 128
+
+    ldi     temp, (1<<REFS0) | (1<<MUX2)                ; Kanal 4, interne Referenzspannung 5V
+    out     ADMUX, temp
+    ldi     temp, (1<<ADEN) | (1<<ADPS2) | (1<<ADPS1) | (1<<ADPS0)
+    out     ADCSRA, temp
+    sbi     ADCSRA, ADSC
+
 ; Taster und Kontakte initialisieren
     cbi DDRC, 1
     sbi PORTC, 1
     cbi DDRC, 2
     sbi PORTC, 2
-    cbi DDRC, 4
-    sbi PORTC, 4
+    //cbi DDRC, 4
+    //sbi PORTC, 4
     cbi DDRC, 5
     sbi PORTC, 5
     SSN MotorSleep, 2
     SSN MotorRichtung, 1
+    SSN MotorDrehzeit, 2
+    SSN MotorDrehzeit_current, 2
+    SSN MotorModus, 1
+
+    //ldi temp, 200
+    //sts MotorDrehzeit, temp
 
     ;Ausgänge
     sbi DDRC, 3
@@ -136,8 +171,6 @@ reset:
     sbi PORTD, 7
     sbi DDRD, 5
     sbi PORTD, 5
-
-    out  ADCSRA, NULL
 
 ; Timer 1
     ldi     temp, high( 10000 - 1 )
@@ -174,6 +207,40 @@ nop
 nop
 cli
 
+
+sbic    ADCSRA, ADSC        ; wenn der ADC fertig ist, wird dieses Bit gelöscht
+rjmp    no_adc
+    in      temp, ADCL         ; immer zuerst LOW Byte lesen
+    in      temp1, ADCH        ; danach das mittlerweile gesperrte High Byte
+    andi temp1, 0b00000011
+    // * 16
+    lsl temp
+    rol temp1
+    lsl temp
+    rol temp1
+    lsl temp
+    rol temp1
+    lsl temp
+    rol temp1
+    sts MotorDrehzeit, temp1
+    sts MotorDrehzeit+1, temp
+    sbi     ADCSRA, ADSC
+no_adc:
+
+// Motor drehen
+CSN MotorDrehzeit_current, 2, keineDrehzeit, nochDrehzeit
+nochDrehzeit:
+SRS MotorDrehzeit_current, 2, EINS
+// der Motor darf sich drehen
+ausstecher_start
+rjmp nachDrehzeit
+keineDrehzeit:
+// wenn die Drehzeit zuende ist, dann stoppen
+ausstecher_stop
+nachDrehzeit:
+
+
+
 CSN MotorSleep, 2, keinPresseSleep, presseSchlaeft
 presseSchlaeft:
 SRS MotorSleep, 2, EINS
@@ -189,6 +256,7 @@ sbis PINC, 1
 rjmp motor_ist_oben
 
 // wir müssen hoch fahren
+sts MotorModus, NULL
 CSE MotorRichtung, 1, A, B
 A:
 motor_sleep 600
@@ -208,6 +276,7 @@ motor_ist_oben:
 sts MotorRichtung, ALL
 ausstecher_stop
 motor_stop
+sts MotorModus, NULL
 rjmp ende
 
 runter_fahren:
@@ -215,6 +284,7 @@ sbis PINC, 2
 rjmp motor_ist_unten
 
 // der Motor muss runter fahren
+sts MotorModus, NULL
 CSN MotorRichtung, 1, A2, B2
 A2:
 motor_sleep 600
@@ -232,7 +302,7 @@ rjmp ende
 motor_ist_unten:
 sts MotorRichtung, ALL
 motor_stop
-ausstecher_start
+setze_drehzeit
 rjmp ende
 
 ende:
@@ -243,3 +313,6 @@ reti
 .DSEG
 MotorSleep: .BYTE 2
 MotorRichtung: .BYTE 1
+MotorDrehzeit: .BYTE 2
+MotorDrehzeit_current: .BYTE 2
+MotorModus: .BYTE 1
